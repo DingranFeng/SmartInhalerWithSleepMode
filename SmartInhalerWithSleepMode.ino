@@ -9,6 +9,7 @@
 #include <ArduinoBLE.h> // library for Bluetooth communication
 #include <SPI.h> // library for communication with SPI (Serial Peripheral Interface) devices
 #include <SD.h> // library for SD card control
+#include <math.h>
 
 const int CHIP_SELECT = 10; // pin for Chip Select (CS) signal for the SPI communication with SD
 const int NUM_MS = 2000; // number of milliseconds to delay
@@ -20,7 +21,7 @@ int r = -1, g = -1, b = -1, luminance = -1; // color channels data
 float ax = -999.0, ay = -999.0, az = -999.0; // linear acceleration
 double roll = -999.00; // x axis angle
 double pitch = -999.00; // y axis angle
-float gx = -999.0, gy = -999.0, gz = -999.0; // angular velocity (°/sec)
+float gx = -999.0, gy = -999.0, gz = -999.0, angularVelocity = -999.0; // angular velocity (°/sec)
 float mx = -999.0, my = -999.0, mz = -999.0; // magnetic field (μT)
 float pressure = -999.0, temperature = -999.0, humidity = -999.0;
 float sound = -999.0; // sound volume of environment noise (dB)
@@ -32,25 +33,25 @@ bool SDEmpty = true; // Is SD card empty
 
 // Define BLE service and characteristics using UUID
 BLEService myBLEService("fd09f5b1-5ebe-4df9-b2ef-b6d778ece98c");
-BLEIntCharacteristic hourBLE("917d5312-529b-459d-b708-eb81812935fa", BLERead | BLENotify);
-BLEIntCharacteristic minuteBLE("7831d64f-b9eb-4d63-8e75-2cccfd22c925", BLERead | BLENotify);
-BLEIntCharacteristic secondBLE("022e2c37-6a6a-41c6-bc06-1fae2bb53909", BLERead | BLENotify);
+// BLEIntCharacteristic hourBLE("917d5312-529b-459d-b708-eb81812935fa", BLERead | BLENotify);
+// BLEIntCharacteristic minuteBLE("7831d64f-b9eb-4d63-8e75-2cccfd22c925", BLERead | BLENotify);
+// BLEIntCharacteristic secondBLE("022e2c37-6a6a-41c6-bc06-1fae2bb53909", BLERead | BLENotify);
 BLEIntCharacteristic rBLE("69ef4849-ed83-4665-9fe0-852f3fc9f330", BLERead | BLENotify);
 BLEIntCharacteristic gBLE("1a7a4154-bf0b-40a5-820e-0307aaf259b7", BLERead | BLENotify);
 BLEIntCharacteristic bBLE("a5807b3f-8de8-4916-aa32-b7d4f82cd7d6", BLERead | BLENotify);
 BLEIntCharacteristic luminanceBLE("1d3430e9-675a-4e8a-a2ce-2d9b3ca7edc2", BLERead | BLENotify);
-BLEFloatCharacteristic axBLE("13ca0bab-f75f-4975-8862-2fad91384809", BLERead | BLENotify);
-BLEFloatCharacteristic ayBLE("4f60ab18-1824-4c26-be73-5b0c30efa225", BLERead | BLENotify);
-BLEFloatCharacteristic azBLE("640587e1-f24c-4d1d-b67d-73cee1c28382", BLERead | BLENotify);
+// BLEFloatCharacteristic axBLE("13ca0bab-f75f-4975-8862-2fad91384809", BLERead | BLENotify);
+// BLEFloatCharacteristic ayBLE("4f60ab18-1824-4c26-be73-5b0c30efa225", BLERead | BLENotify);
+// BLEFloatCharacteristic azBLE("640587e1-f24c-4d1d-b67d-73cee1c28382", BLERead | BLENotify);
 BLEDoubleCharacteristic rollBLE("355ade2a-3451-4455-bf04-436f3c70af2b", BLERead | BLENotify ); 
 BLEDoubleCharacteristic pitchBLE("6164171a-e232-407d-885f-e373cfc24554", BLERead | BLENotify ); 
 BLEFloatCharacteristic gxBLE("7c4cca54-3033-490a-a2ac-cb4b8c82fc8b", BLERead | BLENotify);
 BLEFloatCharacteristic gyBLE("ba581012-f1a4-4ecc-b226-5a5d0f8ab22b", BLERead | BLENotify);
 BLEFloatCharacteristic gzBLE("7c2e28e8-830d-4e16-aa96-fc0f4bcbcc67", BLERead | BLENotify);
-BLEFloatCharacteristic mxBLE("a159e7ef-001b-46d5-b64a-d46f42757f1a", BLERead | BLENotify);
-BLEFloatCharacteristic myBLE("55f7adfd-1dee-4048-b46a-989b13175bef", BLERead | BLENotify);
-BLEFloatCharacteristic mzBLE("0340c189-10f8-4805-bbe8-a53c97f4b685", BLERead | BLENotify);
-BLEFloatCharacteristic pressureBLE("529865f7-8da6-4bd7-863c-c4028df668f8", BLERead | BLENotify);
+// BLEFloatCharacteristic mxBLE("a159e7ef-001b-46d5-b64a-d46f42757f1a", BLERead | BLENotify);
+// BLEFloatCharacteristic myBLE("55f7adfd-1dee-4048-b46a-989b13175bef", BLERead | BLENotify);
+// BLEFloatCharacteristic mzBLE("0340c189-10f8-4805-bbe8-a53c97f4b685", BLERead | BLENotify);
+BLEFloatCharacteristic angularVelocityBLE("529865f7-8da6-4bd7-863c-c4028df668f8", BLERead | BLENotify);
 BLEFloatCharacteristic temperatureBLE("d8fb2c21-5808-4bd8-b178-a8c587de4286", BLERead | BLENotify);
 // BLEFloatCharacteristic humidityBLE("", BLERead | BLENotify);
 BLEFloatCharacteristic soundBLE("125dd222-6a88-4f3f-bde8-4f428c54c4e0", BLERead | BLENotify);
@@ -124,50 +125,52 @@ void setup(){
     BLE.setLocalName("Asthma Inhaler"); 
     BLE.setAdvertisedService(myBLEService); 
 
-    myBLEService.addCharacteristic(hourBLE); 
-    myBLEService.addCharacteristic(minuteBLE); 
-    myBLEService.addCharacteristic(secondBLE); 
+    // myBLEService.addCharacteristic(hourBLE); 
+    // myBLEService.addCharacteristic(minuteBLE); 
+    // myBLEService.addCharacteristic(secondBLE); 
     myBLEService.addCharacteristic(rBLE); 
     myBLEService.addCharacteristic(gBLE); 
     myBLEService.addCharacteristic(bBLE); 
     myBLEService.addCharacteristic(luminanceBLE); 
-    myBLEService.addCharacteristic(axBLE); 
-    myBLEService.addCharacteristic(ayBLE); 
-    myBLEService.addCharacteristic(azBLE); 
+    // myBLEService.addCharacteristic(axBLE); 
+    // myBLEService.addCharacteristic(ayBLE); 
+    // myBLEService.addCharacteristic(azBLE); 
     myBLEService.addCharacteristic(rollBLE); 
     myBLEService.addCharacteristic(pitchBLE); 
     myBLEService.addCharacteristic(gxBLE); 
     myBLEService.addCharacteristic(gyBLE); 
     myBLEService.addCharacteristic(gzBLE); 
-    myBLEService.addCharacteristic(mxBLE); 
-    myBLEService.addCharacteristic(myBLE); 
-    myBLEService.addCharacteristic(mzBLE); 
-    myBLEService.addCharacteristic(pressureBLE); 
+    // myBLEService.addCharacteristic(mxBLE); 
+    // myBLEService.addCharacteristic(myBLE); 
+    // myBLEService.addCharacteristic(mzBLE); 
+    // myBLEService.addCharacteristic(pressureBLE); 
+    myBLEService.addCharacteristic(angularVelocityBLE); 
     myBLEService.addCharacteristic(temperatureBLE); 
     myBLEService.addCharacteristic(soundBLE); 
 
     BLE.addService(myBLEService); 
 
     // Set initial default characteristics 
-    hourBLE.writeValue(-1); 
-    minuteBLE.writeValue(-1); 
-    secondBLE.writeValue(-1); 
+    // hourBLE.writeValue(-1); 
+    // minuteBLE.writeValue(-1); 
+    // secondBLE.writeValue(-1); 
     rBLE.writeValue(r); 
     gBLE.writeValue(g); 
     bBLE.writeValue(b); 
     luminanceBLE.writeValue(luminance); 
-    axBLE.writeValue(ax); 
-    ayBLE.writeValue(ay); 
-    azBLE.writeValue(az); 
+    // axBLE.writeValue(ax); 
+    // ayBLE.writeValue(ay); 
+    // azBLE.writeValue(az); 
     rollBLE.writeValue(roll); 
     pitchBLE.writeValue(pitch); 
     gxBLE.writeValue(gx); 
     gyBLE.writeValue(gy); 
     gzBLE.writeValue(gz); 
-    mxBLE.writeValue(mx); 
-    myBLE.writeValue(my); 
-    mzBLE.writeValue(mz); 
-    pressureBLE.writeValue(pressure); 
+    angularVelocityBLE.writeValue(angularVelocity);
+    // mxBLE.writeValue(mx); 
+    // myBLE.writeValue(my); 
+    // mzBLE.writeValue(mz); 
+    // pressureBLE.writeValue(pressure); 
     temperatureBLE.writeValue(temperature); 
     soundBLE.writeValue(sound); 
 
@@ -347,12 +350,15 @@ void updateData() {
 
   // Get angular velocity data
   IMU.readGyroscope(gx, gy, gz); 
+  angularVelocity = sqrt(gx * gx + gy * gy + gz * gz);
   Serial.print("Gyroscope [X Y Z]: "); 
   Serial.print(gx); 
   Serial.print(" "); 
   Serial.print(gy); 
   Serial.print(" "); 
   Serial.println(gz);
+  Serial.print("Angular Velocity: "); 
+  Serial.println(angularVelocity);
 
   // Get magnetometer data
   IMU.readMagneticField(mx, my, mz); 
@@ -396,25 +402,25 @@ void updateData() {
 
 void sendBluetooth() {
   // Write new data to the characteristics
-  hourBLE.writeValue(hour());
-  minuteBLE.writeValue(minute());
-  secondBLE.writeValue(second());
+  // hourBLE.writeValue(hour());
+  // minuteBLE.writeValue(minute());
+  // secondBLE.writeValue(second());
   rBLE.writeValue(r);
   gBLE.writeValue(g);
   bBLE.writeValue(b);
   luminanceBLE.writeValue(luminanceBLE);
-  axBLE.writeValue(ax);
-  ayBLE.writeValue(ay);
-  azBLE.writeValue(az);
+  // axBLE.writeValue(ax);
+  // ayBLE.writeValue(ay);
+  // azBLE.writeValue(az);
   rollBLE.writeValue(roll);
   pitchBLE.writeValue(pitch);
   gxBLE.writeValue(gx);
   gyBLE.writeValue(gy);
   gzBLE.writeValue(gz);
-  mxBLE.writeValue(mx);
-  myBLE.writeValue(my);
-  mzBLE.writeValue(mz);
-  pressureBLE.writeValue(pressure);
+  // mxBLE.writeValue(mx);
+  // myBLE.writeValue(my);
+  // mzBLE.writeValue(mz);
+  angularVelocityBLE.writeValue(angularVelocity);
   temperatureBLE.writeValue(temperature);
   soundBLE.writeValue(sound);
 
@@ -453,6 +459,8 @@ void writeSD() {
     dataFile.print(gy);
     dataFile.print(",");
     dataFile.print(gz);
+    dataFile.print(",");
+    dataFile.print(angularVelocity);
     dataFile.print(",");
     dataFile.print(mx);
     dataFile.print(",");
