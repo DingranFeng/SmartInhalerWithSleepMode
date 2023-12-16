@@ -21,6 +21,7 @@ int r = -1, g = -1, b = -1, luminance = -1; // color channels data
 float ax = -999.0, ay = -999.0, az = -999.0; // linear acceleration
 double roll = -999.00; // x axis angle
 double pitch = -999.00; // y axis angle
+
 float gx = -999.0, gy = -999.0, gz = -999.0, angularVelocity = -999.0; // angular velocity (°/sec)
 float mx = -999.0, my = -999.0, mz = -999.0; // magnetic field (μT)
 float pressure = -999.0, temperature = -999.0, humidity = -999.0;
@@ -30,6 +31,7 @@ static const int frequency = 16000; // default PCM output frequency
 short sampleBuffer[512]; // Buffer to read samples into, each sample is 16-bits
 volatile int samplesRead; // Number of audio samples read
 bool SDEmpty = true; // Is SD card empty
+bool isCharacteristicsRead = false; // Is APP reading characteristics
 
 // Define BLE service and characteristics using UUID
 BLEService myBLEService("fd09f5b1-5ebe-4df9-b2ef-b6d778ece98c");
@@ -55,6 +57,7 @@ BLEFloatCharacteristic angularVelocityBLE("529865f7-8da6-4bd7-863c-c4028df668f8"
 BLEFloatCharacteristic temperatureBLE("d8fb2c21-5808-4bd8-b178-a8c587de4286", BLERead | BLENotify);
 // BLEFloatCharacteristic humidityBLE("", BLERead | BLENotify);
 BLEFloatCharacteristic soundBLE("125dd222-6a88-4f3f-bde8-4f428c54c4e0", BLERead | BLENotify);
+BLEBoolCharacteristic isCharacteristicsReadBLE("9336826c-6f1d-42c9-9db6-7441b6254539", BLERead | BLENotify);
 
 void setup(){
   Serial.begin(9600);
@@ -102,19 +105,19 @@ void setup(){
   }
   
   // Initialize SD card
-  if (!SD.begin(CHIP_SELECT)) {
-    Serial.println("Initialization of SD card failed.");
-    while (1);
-  }
-  dataFile = SD.open("data.csv", FILE_WRITE);
-  if (dataFile) {
-    Serial.print("Writing to data.txt...");
-    // dataFile.println("time,r,g,b,luminance,ax,ay,az,roll,pitch,gx,gy,gz,mx,my,mz,pressure,temperature,sound");
-    dataFile.close();
-    Serial.println("done.");
-  } else {
-    Serial.println("Error opening data.txt");
-  }
+  // if (!SD.begin(CHIP_SELECT)) {
+  //   Serial.println("Initialization of SD card failed.");
+  //   while (1);
+  // }
+  // dataFile = SD.open("data.csv", FILE_WRITE);
+  // if (dataFile) {
+  //   Serial.print("Writing to data.txt...");
+  //   // dataFile.println("time,r,g,b,luminance,ax,ay,az,roll,pitch,gx,gy,gz,mx,my,mz,pressure,temperature,sound");
+  //   dataFile.close();
+  //   Serial.println("done.");
+  // } else {
+  //   Serial.println("Error opening data.txt");
+  // }
 
   // Initialize Bluetooth Low Energy (BLE)
   if (!BLE.begin()) {
@@ -140,6 +143,7 @@ void setup(){
     myBLEService.addCharacteristic(gxBLE); 
     myBLEService.addCharacteristic(gyBLE); 
     myBLEService.addCharacteristic(gzBLE); 
+    
     // myBLEService.addCharacteristic(mxBLE); 
     // myBLEService.addCharacteristic(myBLE); 
     // myBLEService.addCharacteristic(mzBLE); 
@@ -189,15 +193,15 @@ void loop() {
     Serial.print("Connected to smartphone! Device MAC address: ");
     Serial.println(central.address());
     if (!SDEmpty) {
-      transferSDData();
-      cleanSDData();
+      // transferSDData();
+      // clearSDData();
       SDEmpty = true;
     }    
     while (central.connected()) { //
       printTime();     
       updateData();
       sendBluetooth();
-      anglesJudgement();
+      anglesJudgement(); // Go to sleep or not
       delay(NUM_MS);
     }
     Serial.println("Bluetooth disconnect!");
@@ -205,9 +209,9 @@ void loop() {
     Serial.println("Writing to SD card...");
     printTime();     
     updateData();
-    writeSD();
+    // writeSD();
     SDEmpty = false;
-    anglesJudgement();
+    anglesJudgement(); // Go to sleep or not
     delay(NUM_MS);
   }
 }
@@ -442,34 +446,34 @@ void writeSD() {
     dataFile.print(",");
     dataFile.print(b);
     dataFile.print(",");
-    dataFile.print(luminance);
-    dataFile.print(",");
-    dataFile.print(ax);
-    dataFile.print(",");
-    dataFile.print(ay);
-    dataFile.print(",");
-    dataFile.print(az);
-    dataFile.print(",");
+    // dataFile.print(luminance);
+    // dataFile.print(",");
+    // dataFile.print(ax);
+    // dataFile.print(",");
+    // dataFile.print(ay);
+    // dataFile.print(",");
+    // dataFile.print(az);
+    // dataFile.print(",");
     dataFile.print(roll);
     dataFile.print(",");
     dataFile.print(pitch);
     dataFile.print(",");
-    dataFile.print(gx);
-    dataFile.print(",");
-    dataFile.print(gy);
-    dataFile.print(",");
-    dataFile.print(gz);
-    dataFile.print(",");
+    // dataFile.print(gx);
+    // dataFile.print(",");
+    // dataFile.print(gy);
+    // dataFile.print(",");
+    // dataFile.print(gz);
+    // dataFile.print(",");
     dataFile.print(angularVelocity);
     dataFile.print(",");
-    dataFile.print(mx);
-    dataFile.print(",");
-    dataFile.print(my);
-    dataFile.print(",");
-    dataFile.print(mz);
-    dataFile.print(",");
-    dataFile.print(pressure);
-    dataFile.print(",");
+    // dataFile.print(mx);
+    // dataFile.print(",");
+    // dataFile.print(my);
+    // dataFile.print(",");
+    // dataFile.print(mz);
+    // dataFile.print(",");
+    // dataFile.print(pressure);
+    // dataFile.print(",");
     dataFile.print(temperature);
     dataFile.print(",");
     dataFile.println(sound);
@@ -480,13 +484,65 @@ void writeSD() {
 }
 
 void transferSDData() {
-
+  // delay(80000);
+  dataFile = SD.open("data.csv");
+  if (dataFile) {
+    while (dataFile.available()) {
+        String line = dataFile.readStringUntil('\n');
+        parseLine(line);
+        sendBluetooth();
+    }
+    dataFile.close();
+  }
 }
 
-void cleanSDData() {
+void parseLine(String line) {
+  int lastIndex = 0;
+  int nextIndex = 0;
+
+  nextIndex = line.indexOf(',', lastIndex);
+  lastIndex = nextIndex + 1;
+
+  nextIndex = line.indexOf(',', lastIndex);
+  r = line.substring(lastIndex, nextIndex).toInt();
+  lastIndex = nextIndex + 1;
+
+  nextIndex = line.indexOf(',', lastIndex);
+  g = line.substring(lastIndex, nextIndex).toInt();
+  lastIndex = nextIndex + 1;
+
+  nextIndex = line.indexOf(',', lastIndex);
+  b = line.substring(lastIndex, nextIndex).toInt();
+  lastIndex = nextIndex + 1;
+
+  nextIndex = line.indexOf(',', lastIndex);
+  roll = line.substring(lastIndex, nextIndex).toFloat();
+  lastIndex = nextIndex + 1;
+
+  nextIndex = line.indexOf(',', lastIndex);
+  pitch = line.substring(lastIndex, nextIndex).toFloat();
+  lastIndex = nextIndex + 1;
+
+  nextIndex = line.indexOf(',', lastIndex);
+  angularVelocity = line.substring(lastIndex, nextIndex).toFloat();
+  lastIndex = nextIndex + 1;
+  
+  nextIndex = line.indexOf(',', lastIndex);
+  temperature = line.substring(lastIndex, nextIndex).toFloat();
+  lastIndex = nextIndex + 1;
+
+  // nextIndex = line.indexOf(',', lastIndex);
+  sound = line.substring(lastIndex).toFloat();
+  // lastIndex = nextIndex + 1;
+}
+
+void clearSDData() {
+  if (SD.exists("data.csv")) {
+    SD.remove("data.csv");
+  }
   dataFile = SD.open("data.csv", FILE_WRITE);
   if (dataFile) {
-    dataFile.close();
+    dataFile.close(); 
   }
 }
 
