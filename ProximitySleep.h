@@ -12,9 +12,13 @@ class ProximitySleep
     private:
         static SparkFun_APDS9960 apds;
         static int isr_flag;
+        static bool initialized;
+
+        static bool initIfNotInitialized();
 
     public:
         static void sleep(const uint8_t lowThreshold, const uint8_t highThreshold);
+        static bool readProximity(uint8_t& value);
 
         static void interruptRoutine();
 };

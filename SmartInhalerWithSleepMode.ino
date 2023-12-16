@@ -16,6 +16,7 @@ const int NUM_MS = 2000; // number of milliseconds to delay
 const float GEOMETHER_THRESHOLD = 0.03;
 const float ANGLES_VAR_THRESHOLD = 0.02;
 File dataFile;
+uint8_t proximity;
 // int gesture = -999; // hand gesture
 int r = -1, g = -1, b = -1, luminance = -1; // color channels data
 float ax = -999.0, ay = -999.0, az = -999.0; // linear acceleration
@@ -38,6 +39,7 @@ BLEService myBLEService("fd09f5b1-5ebe-4df9-b2ef-b6d778ece98c");
 // BLEIntCharacteristic hourBLE("917d5312-529b-459d-b708-eb81812935fa", BLERead | BLENotify);
 // BLEIntCharacteristic minuteBLE("7831d64f-b9eb-4d63-8e75-2cccfd22c925", BLERead | BLENotify);
 // BLEIntCharacteristic secondBLE("022e2c37-6a6a-41c6-bc06-1fae2bb53909", BLERead | BLENotify);
+BLEIntCharacteristic proximityBLE("49cf8d98-2610-497e-8567-66f4eaa170ee", BLERead | BLENotify);
 BLEIntCharacteristic rBLE("69ef4849-ed83-4665-9fe0-852f3fc9f330", BLERead | BLENotify);
 BLEIntCharacteristic gBLE("1a7a4154-bf0b-40a5-820e-0307aaf259b7", BLERead | BLENotify);
 BLEIntCharacteristic bBLE("a5807b3f-8de8-4916-aa32-b7d4f82cd7d6", BLERead | BLENotify);
@@ -131,6 +133,7 @@ void setup(){
     // myBLEService.addCharacteristic(hourBLE); 
     // myBLEService.addCharacteristic(minuteBLE); 
     // myBLEService.addCharacteristic(secondBLE); 
+    myBLEService.addCharacteristic(proximityBLE); 
     myBLEService.addCharacteristic(rBLE); 
     myBLEService.addCharacteristic(gBLE); 
     myBLEService.addCharacteristic(bBLE); 
@@ -158,6 +161,7 @@ void setup(){
     // hourBLE.writeValue(-1); 
     // minuteBLE.writeValue(-1); 
     // secondBLE.writeValue(-1); 
+    proximityBLE.writeValue(proximity);
     rBLE.writeValue(r); 
     gBLE.writeValue(g); 
     bBLE.writeValue(b); 
@@ -184,7 +188,6 @@ void setup(){
   }
 
 }
-
 
 void loop() {
   Serial.println("Discovering smartphone...");
@@ -239,7 +242,7 @@ void anglesJudgement() {
       readingsPitch[i] = pitch;
       totalPitch += pitch;
 
-      delay(100);
+      delay(200);
     }
 
     averageRoll = totalRoll / (float)numReadings;
@@ -275,8 +278,23 @@ void anglesJudgement() {
         continue;
       } else {
         Serial.println("Device is laying statically. Go to sleep...");
-        // Sleep
-        ProximitySleep::sleep(0, 50);
+        // Sleep while the device is static
+        if(!ProximitySleep::readProximity(proximity)) {
+          Serial.println("Failed to read proximity.");
+        } else {
+          proximity = 255 - proximity;
+        }
+        if (proximity > 100) {
+          Serial.println("State: Lying on the table without obstacle");
+          ProximitySleep::sleep(0, 50); // Lying on the table without obstacle
+        } else if (proximity < 50) {
+          Serial.println("State: lying upside-down on the table");
+          ProximitySleep::sleep(100, 255); // lying upside-down on the table
+        } else {
+          Serial.println("State: Lying statically but there is a close obstacle like bookshelf");
+          ProximitySleep::sleep(0, 5); // Lying statically but there is a close obstacle like bookshelf
+        }
+        
       }
     } else {
       break;
@@ -285,8 +303,23 @@ void anglesJudgement() {
 
   if (averageRoll < -15 || averageRoll > 15 || averagePitch < -10 || averagePitch > 10) {
     Serial.println("Device is laying non-statically. Go to sleep...");
-    // Sleep
-    ProximitySleep::sleep(0, 50);
+    // Sleep while the device is unstatic
+    if(!ProximitySleep::readProximity(proximity)) {
+      Serial.println("Failed to read proximity.");
+    } else {
+      proximity = 255 - proximity;
+    }
+    if (proximity < 50) {
+      Serial.println("State: Lying in a walking person's backpack or upside-down on a bus");
+      ProximitySleep::sleep(100, 255); // Lying in a walking person's backpack or upside-down on a bus
+    } else if (proximity > 100) {
+      Serial.println("State: Lying on a bus without obstacle");
+      ProximitySleep::sleep(0, 50); // Lying on a bus without obstacle
+    } else {
+      Serial.println("State: Lying unstatically but there is a close obstacle");
+      ProximitySleep::sleep(0, 5); // Lying unstatically but there is a close obstacle
+    }
+    
   }
 }
 
@@ -318,6 +351,15 @@ void updateData() {
   //     // ignore
   //     break;
   // }
+
+  // Get proximity data
+  if(!ProximitySleep::readProximity(proximity)) {
+    Serial.println("Failed to read proximity.");
+  } else {
+    proximity = 255 - proximity;
+    Serial.print("Proximity: "); 
+    Serial.println(proximity);
+  }
 
   // Get color channels data
   while (!APDS.colorAvailable()) {
@@ -409,6 +451,7 @@ void sendBluetooth() {
   // hourBLE.writeValue(hour());
   // minuteBLE.writeValue(minute());
   // secondBLE.writeValue(second());
+  proximityBLE.writeValue(proximity);
   rBLE.writeValue(r);
   gBLE.writeValue(g);
   bBLE.writeValue(b);

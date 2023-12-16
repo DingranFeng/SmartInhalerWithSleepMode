@@ -6,9 +6,13 @@
 
 SparkFun_APDS9960 ProximitySleep::apds = SparkFun_APDS9960();
 int ProximitySleep::isr_flag = 0;
+bool ProximitySleep::initialized = false;
 
 void ProximitySleep::sleep(const uint8_t lowThreshold, const uint8_t highThreshold)
 {
+
+    initIfNotInitialized();
+
     for (int i = 2; i < 14; i++) pinMode(i, INPUT_PULLUP);
     // Set LED as output
     pinMode(LED_PIN, OUTPUT);
@@ -26,17 +30,7 @@ void ProximitySleep::sleep(const uint8_t lowThreshold, const uint8_t highThresho
     // Initialize interrupt service routine
     attachInterrupt(APDS9960_INT, interruptRoutine, FALLING);
 
-    // Initialize APDS-9960 (configure I2C and initial values)
-    if (apds.init()) {
-        Serial.println(F("APDS-9960 initialization complete"));
-    } else {
-        Serial.println(F("Something went wrong during APDS-9960 init!"));
-    }
-
-    // Adjust the Proximity sensor gain
-    if (!apds.setProximityGain(PGAIN_4X)) {
-        Serial.println(F("Something went wrong trying to set PGAIN"));
-    }
+    
 
     // Set proximity interrupt thresholds
     if (!apds.setProximityIntLowThreshold(lowThreshold)) {
@@ -46,12 +40,7 @@ void ProximitySleep::sleep(const uint8_t lowThreshold, const uint8_t highThresho
         Serial.println(F("Error writing high threshold"));
     }
 
-    // Start running the APDS-9960 proximity sensor (interrupts)
-    if (apds.enableProximitySensor(true)) {
-        Serial.println(F("Proximity sensor is now running"));
-    } else {
-        Serial.println(F("Something went wrong during sensor init!"));
-    }
+
 
     apds.disableLightSensor();
     apds.disableGestureSensor();
@@ -71,6 +60,52 @@ void ProximitySleep::sleep(const uint8_t lowThreshold, const uint8_t highThresho
     digitalWrite(PIN_ENABLE_I2C_PULLUP, LOW);
 
     NRF_POWER->SYSTEMOFF = 1;
+}
+
+bool ProximitySleep::initIfNotInitialized()
+{
+    if(ProximitySleep::initialized)
+    {
+        return true;
+    }
+    // Initialize APDS-9960 (configure I2C and initial values)
+    if (apds.init()) {
+        Serial.println(F("APDS-9960 initialization complete"));
+    } else {
+        Serial.println(F("Something went wrong during APDS-9960 init!"));
+        return false;
+    }
+
+    // Adjust the Proximity sensor gain
+    if (!apds.setProximityGain(PGAIN_4X)) {
+        Serial.println(F("Something went wrong trying to set PGAIN"));
+        return false;
+    }
+
+    // Start running the APDS-9960 proximity sensor (interrupts)
+    if (apds.enableProximitySensor(true)) {
+        Serial.println(F("Proximity sensor is now running"));
+    } else {
+        Serial.println(F("Something went wrong during sensor init!"));
+    }
+
+    ProximitySleep::initialized = true;
+    return true;
+}
+
+bool ProximitySleep::readProximity(uint8_t& value)
+{
+    if(!initIfNotInitialized())
+    {
+        return false;
+    }
+    
+    if(!apds.readProximity(value))
+    {
+        return false;
+    }
+    
+    return true;
 }
 
 void ProximitySleep::interruptRoutine() {
