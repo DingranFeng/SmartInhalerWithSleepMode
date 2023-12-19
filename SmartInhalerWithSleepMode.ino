@@ -154,6 +154,7 @@ void setup(){
     myBLEService.addCharacteristic(angularVelocityBLE); 
     myBLEService.addCharacteristic(temperatureBLE); 
     myBLEService.addCharacteristic(soundBLE); 
+    myBLEService.addCharacteristic(isCharacteristicsReadBLE);
 
     BLE.addService(myBLEService); 
 
@@ -182,6 +183,8 @@ void setup(){
     temperatureBLE.writeValue(temperature); 
     soundBLE.writeValue(sound); 
 
+    isCharacteristicsReadBLE.setEventHandler(BLEWritten, onCharacteristicsRead); // Set a event handler for the signal
+
     //Start advertising 
     BLE.advertise(); 
     Serial.println("Bluetooth Device active, waiting for connections..."); 
@@ -190,6 +193,8 @@ void setup(){
 }
 
 void loop() {
+  BLE.poll(); // Process BLE events
+
   Serial.println("Discovering smartphone...");
   BLEDevice central = BLE.central(); // central device (smartphone)
   if (central) { // Transmit data through BLE
@@ -216,6 +221,13 @@ void loop() {
     SDEmpty = false;
     anglesJudgement(); // Go to sleep or not
     delay(NUM_MS);
+  }
+}
+
+void onCharacteristicsRead(BLEDevice central, BLECharacteristic characteristic) {
+  if (characteristic.uuid() == "9336826c-6f1d-42c9-9db6-7441b6254539") {
+    isCharacteristicsRead = characteristic.value();
+    Serial.println("The smartphone is reading characteristics...");
   }
 }
 
@@ -324,6 +336,9 @@ void anglesJudgement() {
 }
 
 void updateData() {
+  Serial.print("isCharacteristicsRead: ");
+  Serial.println(isCharacteristicsRead);
+
   // Get gesture motion
   // while (!APDS.gestureAvailable()) {
   //   delay(5);
