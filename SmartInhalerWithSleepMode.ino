@@ -11,7 +11,7 @@
 #include <SD.h> // library for SD card control
 #include <math.h>
 
-const int CHIP_SELECT = 10; // pin for Chip Select (CS) signal for the SPI communication with SD
+const int CHIP_SELECT = 8; // pin for Chip Select (CS) signal for the SPI communication with SD
 const int NUM_MS = 2000; // number of milliseconds to delay
 const float GEOMETHER_THRESHOLD = 0.03;
 const float ANGLES_VAR_THRESHOLD = 0.02;
@@ -59,7 +59,8 @@ BLEFloatCharacteristic angularVelocityBLE("529865f7-8da6-4bd7-863c-c4028df668f8"
 BLEFloatCharacteristic temperatureBLE("d8fb2c21-5808-4bd8-b178-a8c587de4286", BLERead | BLENotify);
 // BLEFloatCharacteristic humidityBLE("", BLERead | BLENotify);
 BLEFloatCharacteristic soundBLE("125dd222-6a88-4f3f-bde8-4f428c54c4e0", BLERead | BLENotify);
-BLEBoolCharacteristic isCharacteristicsReadBLE("9336826c-6f1d-42c9-9db6-7441b6254539", BLERead | BLENotify);
+BLEBoolCharacteristic isCharacteristicsReadBLE("9336826c-6f1d-42c9-9db6-7441b6254539", BLEWritten | BLENotify);
+
 
 void setup(){
   Serial.begin(9600);
@@ -67,6 +68,7 @@ void setup(){
   Serial.println("Program started.");
   delay(200);
   pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(CHIP_SELECT, OUTPUT);
 
   // Time you start (Hour Minute Second Day Month Year )
   setTime(0, 0, 0, 1, 5 , 2023);
@@ -107,19 +109,19 @@ void setup(){
   }
   
   // Initialize SD card
-  // if (!SD.begin(CHIP_SELECT)) {
-  //   Serial.println("Initialization of SD card failed.");
-  //   while (1);
-  // }
-  // dataFile = SD.open("data.csv", FILE_WRITE);
-  // if (dataFile) {
-  //   Serial.print("Writing to data.txt...");
-  //   // dataFile.println("time,r,g,b,luminance,ax,ay,az,roll,pitch,gx,gy,gz,mx,my,mz,pressure,temperature,sound");
-  //   dataFile.close();
-  //   Serial.println("done.");
-  // } else {
-  //   Serial.println("Error opening data.txt");
-  // }
+  if (!SD.begin(CHIP_SELECT)) {
+    Serial.println("Initialization of SD card failed.");
+    while (1);
+  }
+  dataFile = SD.open("data.csv", FILE_WRITE);
+  if (dataFile) {
+    Serial.print("Writing to data.txt...");
+    // dataFile.println("time,r,g,b,luminance,ax,ay,az,roll,pitch,gx,gy,gz,mx,my,mz,pressure,temperature,sound");
+    dataFile.close();
+    Serial.println("done.");
+  } else {
+    Serial.println("Error opening data.txt");
+  }
 
   // Initialize Bluetooth Low Energy (BLE)
   if (!BLE.begin()) {
